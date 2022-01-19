@@ -32,19 +32,6 @@ def split_trajectory(addr, traj_file_name, protein_file_name):
 		with MDAnalysis.Writer("%s/protein%d.pdb" %(ADDR_RAM,counter), protein.n_atoms) as W:
 			W.write(protein)
 		counter += 1
-	#########################################################
-	'''
-	chuncks = 1000
-	nchunks = int(float(nb_frames)/chuncks+0.9999999)
-	for j in range(nchunks):
-		start1 = j * chuncks
-		end1 = (j+1) * chuncks
-		if end1 > nb_frames:
-			end1 = nb_frames
-		with MDAnalysis.Writer("%s/protein%d.pdb" %(ADDR_RAM,j), protein.n_atoms) as W:
-			for ts in u.trajectory[start1:end1]:
-				W.write(protein)
-	'''
 	return nb_atoms, nb_frames#, nchunks
 
 def read_saxs_file(addr, saxs_file_name):
@@ -63,11 +50,6 @@ def run_foxs(addr, frames, saxs_id, saxs_file):
 		os.system("rm %s/protein%d.pdb" %(ADDR_RAM, i))
 		os.system("rm %s/protein%d_%s.dat" %(ADDR_RAM, i, saxs_id))
 		os.system("rm %s/protein%d.pdb.dat" %(ADDR_RAM, i))
-		#os.system("rm %s/protein%d_m*_%s.dat" %(ADDR_RAM, i, saxs_id))
-		#os.system("rm %s/protein%d_m*.pdb.dat" %(ADDR_RAM, i))
-	#file_name = "%s/protein%d_%s.fit" %(ADDR_RAM, (frames-1), saxs_id)
-	#if not os.path.isfile(file_name):
-	#	raise ValueError("FoXs failed!!! %s does not exist!" % file_name)
 	return
 
 def read_profile(addr, saxs_name, nbFrames):
@@ -104,6 +86,36 @@ def print_results(addr, ensemble_size, nbRep):
 			report_file.write("\n")
 	report_file.close()
 
+def plot_results(addr, ensemble_size, nbRep, nb_generation):
+	colors = ['olive', 'purple', 'cyan', 'salmon','darkkhaki', 'darkolivegreen', 'violet', 'green', 'blue', 'red']
+	chi2 = np.zeros((nbRep,len(ensemble_size)), dtype=float)
+	fig, axs = plt.subplots(len(ensemble_size), sharex=True)
+	fig.suptitle('back calculated intensities')
+	for i in range(len(ensemble_size)):
+		for j in range(nbRep):
+			ga1 = pickle.load(open('%s/ga_saxs_%d_%d_%d.dat' %(addr, nb_generation, ensemble_size[i], j), 'rb'))
+			chi2[j][i] = ga1.score[0]
+			if j==0:
+				axs[i].semilogy(ga1.target[0][:, 0], ga1.target[0][:, 1], color='black',linewidth=3.0, label='exp')
+			axs[i].semilogy(ga1.target[0][:, 0], ga1.get_models(0)[0], 
+				color=colors[j],linewidth=1.0, label='rep %d' %(j+1))
+		axs[i].set_ylabel("I", rotation=90)
+		axs[i].set_title('Ensemble size %d' %ensemble_size[i], position=(0.5, 0.75))
+		legend = axs[i].legend(loc='lower left', shadow=False, framealpha=0)
+		legend.get_frame()
+	axs[i].set_xlabel("q")
+	plt.savefig("%s/intensities.jpg" %addr)
+	###############################################
+	fig, ax = plt.subplots()
+	for i in range(nbRep):
+		ax.semilogx(ensemble_size, chi2[i][:], label='rep %d' %(i+1))
+	legend = ax.legend(loc='upper right', shadow=False, framealpha=0)
+	ax.set_ylabel('chi2')
+	ax.set_xlabel('Ensemble size')
+	legend.get_frame()
+	plt.savefig("%s/chi2.jpg" %addr)
+
+
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Extract ensemble of conformations matching best with the experimental SAXS data')
@@ -115,10 +127,17 @@ if __name__ == '__main__':
 	                    required=True)
 	parser.add_argument('--saxs', type=str, help='Experimental SAXS data',
 	                    required=True)
+	###############################################
 	parser.add_argument('-s', help='Ensemble size', nargs='+', type=int,
 	                    default=3)
 	parser.add_argument('-r', help='Number of repeats', type=int,
 	                    default=3)
+	parser.add_argument('-generation', help='Number of generations', type=int,
+	                    default=1000)
+	parser.add_argument('-ensemble', help='Number of ensembles', type=int,
+	                    default=1000)
+	parser.add_argument('-window', help='window size', type=int,
+	                    default=100)
 	args = parser.parse_args()
 
 	PATH = args.addr
@@ -128,6 +147,9 @@ if __name__ == '__main__':
 	saxs_id = SAXSEXPNAME.split(".")[0]
 	ENSEMBLE_SIZE = args.s
 	NUMBER_OF_REPEATS = int(args.r)
+	NUMBER_OF_GENERATIONS = args.generation
+	NUMBER_OF_ENSEMBLES = args.ensemble
+	WINDOW_SIZE = args.window
 
 	Qvalues, Ivalues = read_saxs_file(PATH, SAXSEXPNAME)
 	### divide the trajectory into smaller chunks
@@ -143,15 +165,14 @@ if __name__ == '__main__':
 		ens_size = ENSEMBLE_SIZE[i]
 		for j in range(NUMBER_OF_REPEATS):
 			experiment_labels = ['saxs']
-			n_generation = 1000
-			n_ensemble = 1000
-			window_size = 100
 			rsd_stop = 0.0001
 			experimental_weights = [1.0]
 			score_types = ['chi2']
 			exp_saxs = "%s/%s" %(PATH, SAXSEXPNAME)
 			calc_saxs = "%s/Icalc.dat" %PATH
-			#genetic_algorithm.run_ga_arg(experiment_labels, exp_saxs, calc_saxs, n_generation, n_ensemble, ens_size, experimental_weights, score_types, j, window_size, rsd_stop,PATH)
+			genetic_algorithm.run_ga_arg(experiment_labels, exp_saxs, calc_saxs, NUMBER_OF_GENERATIONS, NUMBER_OF_ENSEMBLES, ens_size, experimental_weights, score_types, j, WINDOW_SIZE, rsd_stop,PATH)
 	### report the results
 	print_results(PATH, ENSEMBLE_SIZE, NUMBER_OF_REPEATS)
+	plot_results(PATH, ENSEMBLE_SIZE, NUMBER_OF_REPEATS, NUMBER_OF_ENSEMBLES)
+
 	

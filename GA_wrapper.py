@@ -6,12 +6,13 @@
 import os
 import sys
 import argparse
-import numpy
+import numpy as np
 import MDAnalysis
 import os.path 
 import time
 import genetic_algorithm
 import pickle
+import matplotlib.pyplot as plt
 
 ADDR_RAM="/dev/shm"
 """

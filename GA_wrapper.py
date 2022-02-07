@@ -14,6 +14,10 @@ import matplotlib.pyplot as plt
 from zipfile import ZipFile
 import MDAnalysis
 
+"""
+python GA_wrapper.py --addr /c7/scratch2/ykarami/MD/GA/code/data \
+--pdb diubqt.pdb --trj diubqt_prot_fit.xtc --saxs SASDCG7.dat
+"""
 def check_ensemble(ens_list):
 	if len(ens_list) == 0 or ens_list.startswith(",") or ens_list.endswith(","):
 		print("Error in the list of ensemble size!!!")
@@ -127,8 +131,8 @@ def plot_results(addr, ensemble_size, nbRep, nb_generation):
 			ga1 = pickle.load(open(file_name, 'rb'))
 			chi2[j][i] = float(ga1.score[0])
 			if j==0:
-				axs[i,0].semilogy(ga1.target[0][:, 0], ga1.target[0][:, 1], color='black',linewidth=3.0, label='exp')
-			axs[i,0].semilogy(ga1.target[0][:, 0], ga1.get_models(0)[0], color=colors[j],linewidth=1.0, label='rep %d' %(j+1))
+				axs[i,0].semilogy(ga1.target[0][:, 0], ga1.target[0][:, 1], color='black',linewidth=2.5, label='exp')
+			axs[i,0].semilogy(ga1.target[0][:, 0], ga1.get_models(0)[0], color=colors[j],linewidth=1.5, label='rep %d' %(j+1))
 			os.remove(file_name)
 		axs[i,0].set_ylabel("I", rotation=90)
 		axs[i,0].set_title('Ensemble size %d' %ensemble_size[i], position=(0.5, 0.75))
@@ -139,7 +143,9 @@ def plot_results(addr, ensemble_size, nbRep, nb_generation):
 	###############################################
 	fig, ax = plt.subplots()
 	for i in range(nbRep):
-		ax.semilogx(ensemble_size, chi2[i][:], label='rep %d' %(i+1))
+		if len(ensemble_size) > 1:
+			ax.semilogx(ensemble_size, chi2[i][:], color=colors[i])
+		ax.plot(ensemble_size, chi2[i][:], marker="o", markersize=5, label='rep %d' %(i+1), color=colors[i])
 	legend = ax.legend(loc='upper right', shadow=False, framealpha=0)
 	ax.set_ylabel('chi2')
 	ax.set_xlabel('Ensemble size')
@@ -193,6 +199,7 @@ if __name__ == '__main__':
 	### check the inputs
 	ENSEMBLE_SIZE = check_ensemble(ENSEMBLE_SIZE_LIST)
 	nbSAXSpoints = check_SAXS_file(SAXSEXPNAME)
+
 	### check input choice
 	if PROFILE_OR_TRJ == "yes":
 		back_calc_profile = args.calc_saxs

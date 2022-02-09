@@ -47,10 +47,6 @@ import matplotlib.pyplot as plt
 from zipfile import ZipFile
 import MDAnalysis
 
-"""
-python GA_wrapper.py --addr /c7/scratch2/ykarami/MD/GA/code/data \
---pdb diubqt.pdb --trj diubqt_prot_fit.xtc --saxs SASDCG7.dat
-"""
 def check_ensemble(ens_list):
 	if len(ens_list) == 0 or ens_list.startswith(",") or ens_list.endswith(","):
 		print("Error in the list of ensemble size!!!")

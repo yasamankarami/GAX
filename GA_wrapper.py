@@ -202,8 +202,6 @@ if __name__ == '__main__':
 	parser.add_argument('--trj', type=str, help='Trajectory file')
 	parser.add_argument('--calc_saxs', type=str, help='Back-calculated SAXS profile')
 	##################################################################################
-	#parser.add_argument('-s', help='Ensemble size', nargs='+', type=int,
-	#                    default=[3])
 	parser.add_argument('-s', help='Comma separated list of ensemble size', type=str,
 	                    default="3")
 	parser.add_argument('-r', help='Number of repeats', type=int,

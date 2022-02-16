@@ -239,7 +239,8 @@ if __name__ == '__main__':
 	if PROFILE_OR_TRJ == "no":
 		TRAJECTORYNAME = args.trj
 		temp_path = "./temp" #"/dev/shm"
-		os.mkdir(temp_path)
+		if not os.path.exists(temp_path):
+			os.mkdir(temp_path)
 		### read SAXS data
 		Qvalues, Ivalues = read_saxs_file(SAXSEXPNAME)
 		### divide the trajectory into smaller chunks
@@ -261,7 +262,8 @@ if __name__ == '__main__':
 
 	### remove temporary files
 	if PROFILE_OR_TRJ == "no":
-		os.remove(back_calc_profile)
+		#os.remove(back_calc_profile)
+		os.system("cp %s %s" %(back_calc_profile, working_dir))
 		os.rmdir(temp_path)
 
 	### report the results

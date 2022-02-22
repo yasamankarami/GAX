@@ -262,8 +262,8 @@ if __name__ == '__main__':
 
 	### remove temporary files
 	if PROFILE_OR_TRJ == "no":
-		#os.remove(back_calc_profile)
 		os.system("cp %s %s" %(back_calc_profile, working_dir))
+		os.remove(back_calc_profile)
 		os.rmdir(temp_path)
 
 	### report the results

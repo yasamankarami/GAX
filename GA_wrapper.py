@@ -58,15 +58,22 @@ def check_ensemble(ens_list):
 		ens.append(int(words[i]))
 	return ens
 
-def check_SAXS_file(saxs_file_name):
+def check_SAXS_file(work_dir, saxs_file_name):
+	new_saxs_id = "SAXS_exp_modif"
 	saxs_file = open(saxs_file_name, "r").readlines()
+	modif_saxs_file = open("%s/%s.dat" %(work_dir, new_saxs_id), "w")
 	nb_saxs_points = 0
 	for i in range(len(saxs_file)):
 		if saxs_file[i].startswith("#"): continue
-		if len(saxs_file[i].split()) != 3: 
+		words = saxs_file[i].split()
+		if len(words) != 3: 
 			print("Error in the experimental SAXS data! Every row should contain 3 values (Q, I, err).")
+		if float(words[1]) < 0:
+			print("WARNING Negative intensity value: %s %s %s skipping remaining profile points" %(words[0], words[1], words[2]))
+			break
+		modif_saxs_file.write(saxs_file[i])
 		nb_saxs_points += 1
-	return nb_saxs_points
+	return nb_saxs_points, new_saxs_id
 
 def check_profile_format(profile, nbSAXS):
 	inp_file = open(profile,"r").readlines()
@@ -123,7 +130,7 @@ def read_profile(saxs_name, nbFrames, temp_addr):
 	out_file.close()
 	return Icalc_file_name
 
-def print_results(addr, ensemble_size, nbRep):
+def print_results(addr, ensemble_size, nbRep, new_saxs, bck_profile):
 	zipObj = ZipFile('GAX_output.zip', 'w')
 	report_file = open("%s/GAX_summary.txt" %addr, "w")
 	report_file.write("#ensemble_size,replicate,chi2,frames,weights\n")
@@ -150,6 +157,8 @@ def print_results(addr, ensemble_size, nbRep):
 					report_file.write(";")
 			report_file.write("\n")
 			zipObj.write(file_name)
+	zipObj.write(new_saxs)
+	zipObj.write(bck_profile)
 	zipObj.close()
 	report_file.close()
 	os.system("")
@@ -226,11 +235,12 @@ if __name__ == '__main__':
 	
 	###
 	working_dir = "." #args.addr
-	saxs_id = SAXSEXPNAME.split("/")[-1].split(".")[0]
+	#saxs_id = SAXSEXPNAME.split("/")[-1].split(".")[0]
 	
 	### check the inputs
 	ENSEMBLE_SIZE = check_ensemble(ENSEMBLE_SIZE_LIST)
-	nbSAXSpoints = check_SAXS_file(SAXSEXPNAME)
+	nbSAXSpoints, saxs_id = check_SAXS_file(working_dir, SAXSEXPNAME)
+	new_saxs_file = "%s/%s.dat" %(working_dir, saxs_id)
 
 	### check input choice
 	if PROFILE_OR_TRJ == "yes":
@@ -242,11 +252,11 @@ if __name__ == '__main__':
 		if not os.path.exists(temp_path):
 			os.mkdir(temp_path)
 		### read SAXS data
-		Qvalues, Ivalues = read_saxs_file(SAXSEXPNAME)
+		Qvalues, Ivalues = read_saxs_file(new_saxs_file)
 		### divide the trajectory into smaller chunks
 		nb_atoms,nb_frames = split_trajectory(TRAJECTORYNAME, PDBFILENAME, temp_path)
 		### run FoXs to back calculate the profiles
-		run_foxs(nb_frames, saxs_id, SAXSEXPNAME, temp_path)
+		run_foxs(nb_frames, saxs_id, new_saxs_file, temp_path)
 		### reading the calculated profiles into a single file
 		back_calc_profile = read_profile(saxs_id, nb_frames, temp_path)
 	
@@ -258,7 +268,7 @@ if __name__ == '__main__':
 			rsd_stop = 0.0001
 			experimental_weights = [1.0]
 			score_types = ['chi2']
-			genetic_algorithm.run_ga_arg(experiment_labels, SAXSEXPNAME, back_calc_profile, NUMBER_OF_GENERATIONS, NUMBER_OF_ENSEMBLES, ens_size, experimental_weights, score_types, j, WINDOW_SIZE, rsd_stop, working_dir)
+			genetic_algorithm.run_ga_arg(experiment_labels, new_saxs_file, back_calc_profile, NUMBER_OF_GENERATIONS, NUMBER_OF_ENSEMBLES, ens_size, experimental_weights, score_types, j, WINDOW_SIZE, rsd_stop, working_dir)
 
 	### remove temporary files
 	if PROFILE_OR_TRJ == "no":
@@ -267,5 +277,5 @@ if __name__ == '__main__':
 		os.rmdir(temp_path)
 
 	### report the results
-	print_results(working_dir, ENSEMBLE_SIZE, NUMBER_OF_REPEATS)
+	print_results(working_dir, ENSEMBLE_SIZE, NUMBER_OF_REPEATS, new_saxs_file, "%s/Icalc.dat" %working_dir)
 	plot_results(working_dir, ENSEMBLE_SIZE, NUMBER_OF_REPEATS, NUMBER_OF_ENSEMBLES)

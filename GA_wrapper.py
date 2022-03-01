@@ -60,6 +60,7 @@ def check_ensemble(ens_list):
 
 def check_SAXS_file(work_dir, saxs_file_name):
 	new_saxs_id = "SAXS_exp_modif"
+	saxs_flag = "no"
 	saxs_file = open(saxs_file_name, "r").readlines()
 	modif_saxs_file = open("%s/%s.dat" %(work_dir, new_saxs_id), "w")
 	nb_saxs_points = 0
@@ -70,10 +71,11 @@ def check_SAXS_file(work_dir, saxs_file_name):
 			print("Error in the experimental SAXS data! Every row should contain 3 values (Q, I, err).")
 		if float(words[1]) < 0:
 			print("WARNING Negative intensity value: %s %s %s skipping remaining profile points" %(words[0], words[1], words[2]))
+			saxs_flag = "yes"
 			break
 		modif_saxs_file.write(saxs_file[i])
 		nb_saxs_points += 1
-	return nb_saxs_points, new_saxs_id
+	return nb_saxs_points, new_saxs_id, saxs_flag
 
 def check_profile_format(profile, nbSAXS):
 	inp_file = open(profile,"r").readlines()
@@ -130,14 +132,45 @@ def read_profile(saxs_name, nbFrames, temp_addr):
 	out_file.close()
 	return Icalc_file_name
 
-def print_results(addr, ensemble_size, nbRep, new_saxs, bck_profile):
+def plot_results(addr, ensemble_size, nbRep, nb_generation):
+	colors = ['olive', 'purple', 'cyan', 'salmon','darkkhaki', 'darkolivegreen', 'violet', 'green', 'blue', 'red']
+	chi2 = np.zeros((nbRep,len(ensemble_size)), dtype=float)
+	fig, axs = plt.subplots(len(ensemble_size), 1, sharex=True, squeeze=False)
+	fig.suptitle('Ensemble-based back-calculated SAXS profile')
+	for i in range(len(ensemble_size)):
+		for j in range(nbRep):
+			file_name = '%s/ga_saxs_%d_%d_%d.dat' %(addr, nb_generation, ensemble_size[i], j)
+			ga1 = pickle.load(open(file_name, 'rb'))
+			chi2[j][i] = float(ga1.score[0])
+			if j==0:
+				axs[i,0].semilogy(ga1.target[0][:, 0], ga1.target[0][:, 1], color='black',linewidth=2.5, label='exp')
+			axs[i,0].semilogy(ga1.target[0][:, 0], ga1.get_models(0)[0], color=colors[j],linewidth=1.5, label='rep %d' %(j+1))
+		axs[i,0].set_ylabel("I", rotation=90)
+		axs[i,0].set_title('Ensemble size %d' %ensemble_size[i], position=(0.5, 0.75))
+		legend = axs[i,0].legend(loc='lower left', shadow=False, framealpha=0)
+		legend.get_frame()
+	axs[i,0].set_xlabel("q")
+	plt.savefig("%s/Intensities.jpg" %addr)
+	###############################################
+	fig, ax = plt.subplots()
+	for i in range(nbRep):
+		if len(ensemble_size) > 1:
+			ax.semilogx(ensemble_size, chi2[i][:], color=colors[i])
+		ax.plot(ensemble_size, chi2[i][:], marker="o", markersize=5, label='rep %d' %(i+1), color=colors[i])
+	legend = ax.legend(loc='upper right', shadow=False, framealpha=0)
+	ax.set_ylabel('chi2')
+	ax.set_xlabel('Ensemble size')
+	legend.get_frame()
+	plt.savefig("%s/Chi2.jpg" %addr)
+
+def print_results(addr, ensemble_size, nbRep, nb_generation, saxs_flag, new_saxs, profile_flag, bck_profile):
 	zipObj = ZipFile('GAX_output.zip', 'w')
 	report_file = open("%s/GAX_summary.txt" %addr, "w")
 	report_file.write("#ensemble_size,replicate,chi2,frames,weights\n")
 	for ii in range(len(ensemble_size)):
 		size = ensemble_size[ii]
 		for rep in range(nbRep):
-			file_name = '%s/ga_saxs_1000_%d_%d.dat' %(addr, size, rep)
+			file_name = '%s/ga_saxs_%d_%d_%d.dat' %(addr, nb_generation, size, rep)
 			if not os.path.exists(file_name): continue
 			res_file = open(file_name, 'rb')
 			ga = pickle.load(res_file)
@@ -157,44 +190,16 @@ def print_results(addr, ensemble_size, nbRep, new_saxs, bck_profile):
 					report_file.write(";")
 			report_file.write("\n")
 			zipObj.write(file_name)
-	zipObj.write(new_saxs)
-	zipObj.write(bck_profile)
+			os.remove(file_name)
+	if saxs_flag == "yes":
+		zipObj.write(new_saxs)
+		os.remove(new_saxs)
+	if profile_flag == "no":
+		zipObj.write(bck_profile)
+		os.remove(bck_profile)
 	zipObj.close()
 	report_file.close()
 	os.system("")
-
-def plot_results(addr, ensemble_size, nbRep, nb_generation):
-	colors = ['olive', 'purple', 'cyan', 'salmon','darkkhaki', 'darkolivegreen', 'violet', 'green', 'blue', 'red']
-	chi2 = np.zeros((nbRep,len(ensemble_size)), dtype=float)
-	fig, axs = plt.subplots(len(ensemble_size), 1, sharex=True, squeeze=False)
-	fig.suptitle('Ensemble-based back-calculated SAXS profile')
-	for i in range(len(ensemble_size)):
-		for j in range(nbRep):
-			file_name = '%s/ga_saxs_%d_%d_%d.dat' %(addr, nb_generation, ensemble_size[i], j)
-			ga1 = pickle.load(open(file_name, 'rb'))
-			chi2[j][i] = float(ga1.score[0])
-			if j==0:
-				axs[i,0].semilogy(ga1.target[0][:, 0], ga1.target[0][:, 1], color='black',linewidth=2.5, label='exp')
-			axs[i,0].semilogy(ga1.target[0][:, 0], ga1.get_models(0)[0], color=colors[j],linewidth=1.5, label='rep %d' %(j+1))
-			os.remove(file_name)
-		axs[i,0].set_ylabel("I", rotation=90)
-		axs[i,0].set_title('Ensemble size %d' %ensemble_size[i], position=(0.5, 0.75))
-		legend = axs[i,0].legend(loc='lower left', shadow=False, framealpha=0)
-		legend.get_frame()
-	axs[i,0].set_xlabel("q")
-	plt.savefig("%s/Intensities.jpg" %addr)
-	###############################################
-	fig, ax = plt.subplots()
-	for i in range(nbRep):
-		if len(ensemble_size) > 1:
-			ax.semilogx(ensemble_size, chi2[i][:], color=colors[i])
-		ax.plot(ensemble_size, chi2[i][:], marker="o", markersize=5, label='rep %d' %(i+1), color=colors[i])
-	legend = ax.legend(loc='upper right', shadow=False, framealpha=0)
-	ax.set_ylabel('chi2')
-	ax.set_xlabel('Ensemble size')
-	legend.get_frame()
-	plt.savefig("%s/Chi2.jpg" %addr)
-
 
 if __name__ == '__main__':
 
@@ -239,7 +244,7 @@ if __name__ == '__main__':
 	
 	### check the inputs
 	ENSEMBLE_SIZE = check_ensemble(ENSEMBLE_SIZE_LIST)
-	nbSAXSpoints, saxs_id = check_SAXS_file(working_dir, SAXSEXPNAME)
+	nbSAXSpoints, saxs_id, saxs_mod_flag = check_SAXS_file(working_dir, SAXSEXPNAME)
 	new_saxs_file = "%s/%s.dat" %(working_dir, saxs_id)
 
 	### check input choice
@@ -272,10 +277,14 @@ if __name__ == '__main__':
 
 	### remove temporary files
 	if PROFILE_OR_TRJ == "no":
-		os.system("cp %s %s" %(back_calc_profile, working_dir))
+		new_profile = "%s/Icalc.dat" %working_dir
+		os.system("cp %s %s" %(back_calc_profile, new_profile))
 		os.remove(back_calc_profile)
 		os.rmdir(temp_path)
+	else:
+		new_profile = back_calc_profile
 
 	### report the results
-	print_results(working_dir, ENSEMBLE_SIZE, NUMBER_OF_REPEATS, new_saxs_file, "%s/Icalc.dat" %working_dir)
 	plot_results(working_dir, ENSEMBLE_SIZE, NUMBER_OF_REPEATS, NUMBER_OF_ENSEMBLES)
+	print_results(working_dir, ENSEMBLE_SIZE, NUMBER_OF_REPEATS, NUMBER_OF_ENSEMBLES, saxs_mod_flag, new_saxs_file, PROFILE_OR_TRJ, new_profile)
+	
